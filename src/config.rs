@@ -34,39 +34,39 @@ impl Config {
     }
 
     fn resolve_api_key(provided: Option<String>) -> Result<String> {
-        if let Some(key) = provided
-            && !key.is_empty()
-        {
-            return Ok(key);
+        if let Some(key) = provided {
+            if !key.is_empty() {
+                return Ok(key);
+            }
         }
 
-        if let Ok(key) = env::var("TORN_API_KEY")
-            && !key.is_empty()
-        {
-            return Ok(key);
+        if let Ok(key) = env::var("TORN_API_KEY") {
+            if !key.is_empty() {
+                return Ok(key);
+            }
         }
 
-        if let Ok(key) = env::var("TORN_KEY")
-            && !key.is_empty()
-        {
-            return Ok(key);
+        if let Ok(key) = env::var("TORN_KEY") {
+            if !key.is_empty() {
+                return Ok(key);
+            }
         }
 
         if let Ok(cwd) = env::current_dir() {
             let env_path = cwd.join(".env");
-            if env_path.exists()
-                && let Ok(contents) = fs::read_to_string(&env_path)
-            {
-                for line in contents.lines() {
-                    let line = line.trim();
-                    if line.starts_with('#') || line.is_empty() {
-                        continue;
-                    }
-                    if let Some((key, value)) = line.split_once('=') {
-                        let key = key.trim();
-                        let value = value.trim();
-                        if (key == "TORN_API_KEY" || key == "TORN_KEY") && !value.is_empty() {
-                            return Ok(value.to_string());
+            if env_path.exists() {
+                if let Ok(contents) = fs::read_to_string(&env_path) {
+                    for line in contents.lines() {
+                        let line = line.trim();
+                        if line.starts_with('#') || line.is_empty() {
+                            continue;
+                        }
+                        if let Some((key, value)) = line.split_once('=') {
+                            let key = key.trim();
+                            let value = value.trim();
+                            if (key == "TORN_API_KEY" || key == "TORN_KEY") && !value.is_empty() {
+                                return Ok(value.to_string());
+                            }
                         }
                     }
                 }
