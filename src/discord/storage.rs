@@ -42,7 +42,7 @@ impl Storage {
         let result: std::result::Result<Storage, _> = serde_json::from_str(&contents);
         match result {
             Ok(storage) => Ok(storage),
-            Err(_) => Ok(Self::default()),
+            Err(e) => Err(StorageError::Parse(e.to_string())),
         }
     }
 

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -30,7 +31,7 @@ impl Scheduler {
 
     pub async fn check_all_guilds<F, Fut>(&self, mut callback: F)
     where
-        F: FnMut(u64, u64, i64, String) -> Fut,
+        F: FnMut(u64, u64, i64, String, Vec<FactionAttack>) -> Fut,
         Fut: std::future::Future<Output = ()>,
     {
         let storage = self.storage.read().await;
@@ -62,12 +63,21 @@ impl Scheduler {
                             config.channel_id,
                             config.faction_id,
                             api_key.to_string(),
+                            new_hits.clone(),
                         )
                         .await;
 
                         if let Some(latest) = new_hits.iter().map(|a| a.timestamp).max() {
                             let mut storage = self.storage.write().await;
                             storage.update_timestamp(guild_id, latest);
+                            // Persist storage after updating timestamp
+                            if let Err(e) = storage.save(
+                                &dirs::config_dir()
+                                    .map(|p| p.join("faction-hits").join("discord-storage.json"))
+                                    .unwrap_or_else(|| PathBuf::from("discord-storage.json")),
+                            ) {
+                                tracing::warn!("Failed to persist storage: {}", e);
+                            }
                         }
                     }
                 }
@@ -80,7 +90,7 @@ impl Scheduler {
 
     pub async fn run<F, Fut>(&self, mut callback: F)
     where
-        F: FnMut(u64, u64, i64, String) -> Fut,
+        F: FnMut(u64, u64, i64, String, Vec<FactionAttack>) -> Fut,
         Fut: std::future::Future<Output = ()>,
     {
         let mut interval = time::interval(self.check_interval);
@@ -99,7 +109,12 @@ pub fn format_hits_message(hits: &[FactionAttack]) -> String {
         return "No new non-anonymous hits found.".to_string();
     }
 
-    let mut message = format!("=== {} New Non-Anonymous Hits ===\n\n", filtered.len());
+    let hit_label = if filtered.len() == 1 { "Hit" } else { "Hits" };
+    let mut message = format!(
+        "=== {} New Non-Anonymous {} ===\n\n",
+        filtered.len(),
+        hit_label
+    );
 
     for (i, hit) in filtered.iter().enumerate() {
         let datetime = chrono::DateTime::from_timestamp(hit.timestamp, 0)

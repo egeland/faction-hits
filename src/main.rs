@@ -3,6 +3,8 @@ mod discord;
 use anyhow::{anyhow, Result};
 use chrono::DateTime;
 use clap::{Parser, Subcommand};
+use serenity::builder::CreateMessage;
+use serenity::http::Http;
 use std::path::PathBuf;
 
 use faction_hits::{filter_new_hits, get_latest_timestamp, AppConfig, Config, State, TornClient};
@@ -24,6 +26,20 @@ impl serenity::client::EventHandler for BotEventHandler {
 #[command(name = "faction-hits")]
 #[command(about = "Track non-anonymous hits on faction members", long_about = None)]
 struct Args {
+    #[arg(short, long, help = "Torn API key")]
+    #[arg(env = "TORN_API_KEY")]
+    api_key: Option<String>,
+
+    #[arg(
+        short,
+        long,
+        help = "Faction ID (optional, defaults to key owner's faction)"
+    )]
+    faction_id: Option<i64>,
+
+    #[arg(short, long, help = "Path to state file")]
+    state_file: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -123,10 +139,11 @@ async fn run_cli() -> Result<()> {
 }
 
 fn cli_args() -> Result<CliArgs> {
-    let api_key = std::env::var("TORN_API_KEY").ok().filter(|k| !k.is_empty());
-    let args: CliArgs = ClapArgs::parse().into();
+    let args = ClapArgs::parse();
     Ok(CliArgs {
-        api_key,
+        api_key: args
+            .api_key
+            .or_else(|| std::env::var("TORN_API_KEY").ok().filter(|k| !k.is_empty())),
         faction_id: args.faction_id,
         state_file: args.state_file,
     })
@@ -140,6 +157,10 @@ struct CliArgs {
 
 #[derive(Parser)]
 struct ClapArgs {
+    #[arg(short, long, help = "Torn API key")]
+    #[arg(env = "TORN_API_KEY")]
+    api_key: Option<String>,
+
     #[arg(
         short,
         long,
@@ -154,7 +175,7 @@ struct ClapArgs {
 impl From<ClapArgs> for CliArgs {
     fn from(args: ClapArgs) -> Self {
         Self {
-            api_key: None,
+            api_key: args.api_key,
             faction_id: args.faction_id,
             state_file: args.state_file,
         }
@@ -217,11 +238,29 @@ async fn run_bot(discord_token: Option<String>, check_interval: Option<u64>) -> 
     tracing::info!("Starting bot...");
 
     let storage_clone = storage.clone();
+    let token_clone = token.clone();
     tokio::spawn(async move {
         let scheduler = Scheduler::new(storage_clone, default_key, interval);
         scheduler
-            .run(|_guild_id, _channel_id, _faction_id, _api_key| async {
-                // TODO: Send message to Discord channel
+            .run(|_guild_id, channel_id, _faction_id, _api_key, hits| {
+                let token_clone = token_clone.clone();
+                async move {
+                    // Format hits into a Discord message
+                    let message = format_hits_message(&hits);
+
+                    // Send message to Discord channel
+                    let http = Http::new(&token_clone);
+                    if let Err(e) = serenity::model::id::ChannelId::from(channel_id)
+                        .send_message(&http, CreateMessage::new().content(message))
+                        .await
+                    {
+                        tracing::warn!(
+                            "Failed to send message to Discord channel {}: {}",
+                            channel_id,
+                            e
+                        );
+                    }
+                }
             })
             .await;
     });
