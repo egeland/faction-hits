@@ -27,6 +27,7 @@ impl GuildConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Storage {
+    #[serde(default)]
     pub guilds: HashMap<u64, GuildConfig>,
 }
 
