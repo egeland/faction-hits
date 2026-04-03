@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
 
     println!("Found {} total attacks", attacks.len());
 
-    let new_hits = hits::filter_new_hits(attacks.clone(), &state);
+    let new_hits = hits::filter_new_hits(&attacks, &state);
 
     if new_hits.is_empty() {
         println!("No new non-anonymous hits found.");

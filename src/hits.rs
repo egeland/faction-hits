@@ -26,11 +26,11 @@ impl From<FactionAttack> for NewHit {
     }
 }
 
-pub fn filter_new_hits(attacks: Vec<FactionAttack>, state: &State) -> Vec<NewHit> {
+pub fn filter_new_hits(attacks: &[FactionAttack], state: &State) -> Vec<NewHit> {
     attacks
-        .into_iter()
+        .iter()
         .filter(|attack| attack.timestamp > state.last_check_timestamp && !attack.stealth)
-        .map(NewHit::from)
+        .map(|attack| NewHit::from(attack.clone()))
         .collect()
 }
 
@@ -69,7 +69,7 @@ mod tests {
             faction_id: None,
         };
 
-        let new_hits = filter_new_hits(attacks, &state);
+        let new_hits = filter_new_hits(&attacks, &state);
         assert!(new_hits.is_empty());
     }
 
@@ -81,7 +81,7 @@ mod tests {
             faction_id: None,
         };
 
-        let new_hits = filter_new_hits(attacks, &state);
+        let new_hits = filter_new_hits(&attacks, &state);
         assert_eq!(new_hits.len(), 2);
     }
 
@@ -97,7 +97,7 @@ mod tests {
             faction_id: None,
         };
 
-        let new_hits = filter_new_hits(attacks, &state);
+        let new_hits = filter_new_hits(&attacks, &state);
         assert_eq!(new_hits.len(), 2);
         assert!(new_hits.iter().all(|h| h.timestamp > 50));
     }
@@ -110,7 +110,7 @@ mod tests {
             faction_id: None,
         };
 
-        let new_hits = filter_new_hits(attacks, &state);
+        let new_hits = filter_new_hits(&attacks, &state);
         assert!(new_hits.is_empty());
     }
 
@@ -127,7 +127,7 @@ mod tests {
             faction_id: None,
         };
 
-        let new_hits = filter_new_hits(attacks, &state);
+        let new_hits = filter_new_hits(&attacks, &state);
         assert_eq!(new_hits.len(), 2);
     }
 
@@ -149,7 +149,7 @@ mod tests {
             faction_id: None,
         };
 
-        let new_hits = filter_new_hits(vec![attack], &state);
+        let new_hits = filter_new_hits(&[attack], &state);
         assert_eq!(new_hits.len(), 1);
 
         let hit = &new_hits[0];
