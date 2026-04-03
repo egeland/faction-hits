@@ -107,6 +107,7 @@ pub type Result<T> = std::result::Result<T, ConfigError>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
     use tempfile::TempDir;
 
     #[test]
@@ -142,5 +143,75 @@ mod tests {
         let error = ConfigError::ApiKeyNotFound;
         let display = format!("{}", error);
         assert!(display.contains("API key") || display.contains("TORN_API_KEY"));
+    }
+
+    #[test]
+    fn test_resolve_api_key_from_env_var() {
+        unsafe {
+            env::set_var("TORN_API_KEY", "env-key-test");
+        }
+        let config = Config::from_args(None, None, None);
+        unsafe {
+            env::remove_var("TORN_API_KEY");
+        }
+        assert!(config.is_ok());
+        assert_eq!(config.unwrap().api_key, "env-key-test");
+    }
+
+    #[test]
+    fn test_resolve_api_key_from_torn_key_env() {
+        unsafe {
+            env::set_var("TORN_KEY", "torn-key-test");
+        }
+        let config = Config::from_args(None, None, None);
+        unsafe {
+            env::remove_var("TORN_KEY");
+        }
+        assert!(config.is_ok());
+        assert_eq!(config.unwrap().api_key, "torn-key-test");
+    }
+
+    #[test]
+    fn test_resolve_api_key_empty_arg_falls_through() {
+        unsafe {
+            env::set_var("TORN_API_KEY", "env-fallback-key");
+        }
+        let config = Config::from_args(Some("".to_string()), None, None);
+        unsafe {
+            env::remove_var("TORN_API_KEY");
+        }
+        assert!(config.is_ok());
+        assert_eq!(config.unwrap().api_key, "env-fallback-key");
+    }
+
+    #[test]
+    fn test_resolve_api_key_no_key_available() {
+        unsafe {
+            env::remove_var("TORN_API_KEY");
+        }
+        unsafe {
+            env::remove_var("TORN_KEY");
+        }
+        let tmp_dir = TempDir::new().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(tmp_dir.path()).unwrap();
+
+        let config = Config::from_args(None, None, None);
+        env::set_current_dir(original_dir).unwrap();
+
+        assert!(config.is_err());
+        matches!(config.unwrap_err(), ConfigError::ApiKeyNotFound);
+    }
+
+    #[test]
+    fn test_faction_id_passed_through() {
+        let config = Config::from_args(Some("key".to_string()), Some(12345), None).unwrap();
+        assert_eq!(config.faction_id, Some(12345));
+    }
+
+    #[test]
+    fn test_faction_id_none() {
+        let config = Config::from_args(Some("key".to_string()), None, None).unwrap();
+        assert_eq!(config.faction_id, None);
     }
 }

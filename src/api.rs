@@ -26,12 +26,14 @@ struct ApiErrorDetail {
 
 pub struct TornClient {
     api_key: String,
+    client: reqwest::Client,
 }
 
 impl TornClient {
     pub fn new(api_key: &str) -> Self {
         Self {
             api_key: api_key.to_string(),
+            client: reqwest::Client::new(),
         }
     }
 
@@ -52,8 +54,7 @@ impl TornClient {
             )
         };
 
-        let client = reqwest::Client::new();
-        let mut request = client.get(&url);
+        let mut request = self.client.get(&url);
 
         if let Some(from) = from_timestamp {
             request = request.query(&[("from", from.to_string())]);
@@ -276,4 +277,5 @@ mod tests {
         assert_eq!(err_detail.code, 7);
         assert_eq!(err_detail.error, "Incorrect ID-entity relation");
     }
-}
+
+    }
