@@ -277,5 +277,4 @@ mod tests {
         assert_eq!(err_detail.code, 7);
         assert_eq!(err_detail.error, "Incorrect ID-entity relation");
     }
-
-    }
+}
