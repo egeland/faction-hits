@@ -277,13 +277,14 @@ mod tests {
     #[test]
     fn test_cli_args_from_clap_args() {
         let clap_args = ClapArgs {
+            api_key: Some("test-key".to_string()),
             faction_id: Some(12345),
             state_file: Some(PathBuf::from("/tmp/state.json")),
         };
         let args: CliArgs = clap_args.into();
+        assert_eq!(args.api_key, Some("test-key".to_string()));
         assert_eq!(args.faction_id, Some(12345));
         assert_eq!(args.state_file, Some(PathBuf::from("/tmp/state.json")));
-        assert_eq!(args.api_key, None);
     }
 
     #[test]
