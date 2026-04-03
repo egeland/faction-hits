@@ -43,18 +43,16 @@ impl TornClient {
         from_timestamp: Option<i64>,
     ) -> Result<Vec<FactionAttack>> {
         let url = if let Some(id) = faction_id {
-            format!(
-                "https://api.torn.com/faction/{}?selections=attacksfull&key={}",
-                id, self.api_key
-            )
+            format!("https://api.torn.com/faction/{}?selections=attacksfull", id)
         } else {
-            format!(
-                "https://api.torn.com/faction/?selections=attacksfull&key={}",
-                self.api_key
-            )
+            "https://api.torn.com/faction/?selections=attacksfull".to_string()
         };
 
-        let mut request = self.client.get(&url);
+        let mut request = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("ApiKey {}", self.api_key))
+            .header("User-Agent", "faction-hits/0.1.0");
 
         if let Some(from) = from_timestamp {
             request = request.query(&[("from", from.to_string())]);
