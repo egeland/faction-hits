@@ -1,17 +1,44 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+fn deserialize_i64_or_zero<'de, D>(deserializer: D) -> std::result::Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumOrEmpty {
+        Number(i64),
+        Bool(bool),
+        Empty(String),
+    }
+    match NumOrEmpty::deserialize(deserializer)? {
+        NumOrEmpty::Number(n) => Ok(n),
+        NumOrEmpty::Bool(b) => Ok(if b { 1 } else { 0 }),
+        NumOrEmpty::Empty(s) if s.is_empty() => Ok(0),
+        NumOrEmpty::Empty(s) => s.parse().map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactionAttack {
     #[serde(default)]
     pub id: i64,
+    #[serde(default, deserialize_with = "deserialize_i64_or_zero")]
     pub attacker_id: i64,
+    #[serde(default)]
     pub attacker_name: String,
+    #[serde(default, deserialize_with = "deserialize_i64_or_zero")]
     pub defender_id: i64,
+    #[serde(default)]
     pub defender_name: String,
     pub result: String,
-    #[serde(rename = "stealthed")]
-    pub stealth: bool,
+    #[serde(
+        rename = "stealthed",
+        default,
+        deserialize_with = "deserialize_i64_or_zero"
+    )]
+    pub stealth: i64,
     pub respect: f64,
     #[serde(rename = "timestamp_ended")]
     pub timestamp: i64,
@@ -43,9 +70,9 @@ impl TornClient {
         from_timestamp: Option<i64>,
     ) -> Result<Vec<FactionAttack>> {
         let url = if let Some(id) = faction_id {
-            format!("https://api.torn.com/faction/{}?selections=attacksfull", id)
+            format!("https://api.torn.com/faction/{}?selections=attacks", id)
         } else {
-            "https://api.torn.com/faction/?selections=attacksfull".to_string()
+            "https://api.torn.com/faction/?selections=attacks".to_string()
         };
 
         let mut request = self
@@ -83,15 +110,17 @@ impl TornClient {
         }
 
         let attacks_map = data
-            .get("attacksfull")
+            .get("attacks")
             .and_then(|a| a.as_object())
             .map(|obj| {
                 obj.iter()
                     .filter_map(|(id, value)| {
-                        let mut attack: FactionAttack =
-                            serde_json::from_value(value.clone()).ok()?;
-                        attack.id = id.parse().ok()?;
-                        Some(attack)
+                        let id_parsed = id.parse::<i64>().ok()?;
+                        let attack: FactionAttack = serde_json::from_value(value.clone()).ok()?;
+                        Some(FactionAttack {
+                            id: id_parsed,
+                            ..attack
+                        })
                     })
                     .collect()
             })
@@ -161,7 +190,7 @@ mod tests {
         let attack: FactionAttack = serde_json::from_value(json).unwrap();
         assert_eq!(attack.attacker_id, 111);
         assert_eq!(attack.defender_name, "Defender");
-        assert!(!attack.stealth);
+        assert_eq!(attack.stealth, 0);
         assert_eq!(attack.respect, 1.5);
     }
 
@@ -179,7 +208,7 @@ mod tests {
         });
 
         let attack: FactionAttack = serde_json::from_value(json).unwrap();
-        assert!(attack.stealth);
+        assert_eq!(attack.stealth, 1);
     }
 
     #[test]
