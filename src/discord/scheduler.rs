@@ -53,7 +53,7 @@ impl Scheduler {
                 Ok(attacks) => {
                     let new_hits: Vec<_> = attacks
                         .iter()
-                        .filter(|a| a.timestamp > config.last_check_timestamp && !a.stealth)
+                        .filter(|a| a.timestamp > config.last_check_timestamp && a.stealth == 0)
                         .cloned()
                         .collect();
 
@@ -103,7 +103,7 @@ impl Scheduler {
 }
 
 pub fn format_hits_message(hits: &[FactionAttack]) -> String {
-    let filtered: Vec<_> = hits.iter().filter(|h| !h.stealth).collect();
+    let filtered: Vec<_> = hits.iter().filter(|h| h.stealth == 0).collect();
 
     if filtered.is_empty() {
         return "No new non-anonymous hits found.".to_string();
@@ -153,7 +153,7 @@ mod tests {
                 defender_id: 222,
                 defender_name: "Defender1".to_string(),
                 result: "Lost".to_string(),
-                stealth: false,
+                stealth: 0,
                 respect: 1.5,
                 timestamp: 100,
             },
@@ -164,7 +164,7 @@ mod tests {
                 defender_id: 444,
                 defender_name: "Defender2".to_string(),
                 result: "Attacked".to_string(),
-                stealth: true,
+                stealth: 1,
                 respect: 0.5,
                 timestamp: 101,
             },
@@ -175,7 +175,7 @@ mod tests {
                 defender_id: 666,
                 defender_name: "Defender3".to_string(),
                 result: "Hospitalized".to_string(),
-                stealth: false,
+                stealth: 0,
                 respect: 2.25,
                 timestamp: 102,
             },
