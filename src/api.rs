@@ -20,6 +20,25 @@ where
     }
 }
 
+fn deserialize_option_i64<'de, D>(deserializer: D) -> std::result::Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumOrEmpty {
+        Number(i64),
+        Bool(bool),
+        Empty(String),
+    }
+    match NumOrEmpty::deserialize(deserializer)? {
+        NumOrEmpty::Number(n) => Ok(Some(n)),
+        NumOrEmpty::Bool(b) => Ok(Some(if b { 1 } else { 0 })),
+        NumOrEmpty::Empty(s) if s.is_empty() => Ok(None),
+        NumOrEmpty::Empty(s) => s.parse().map(Some).map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactionAttack {
     #[serde(default)]
@@ -28,10 +47,14 @@ pub struct FactionAttack {
     pub attacker_id: i64,
     #[serde(default)]
     pub attacker_name: String,
+    #[serde(default, deserialize_with = "deserialize_option_i64")]
+    pub attacker_faction: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_i64_or_zero")]
     pub defender_id: i64,
     #[serde(default)]
     pub defender_name: String,
+    #[serde(default, deserialize_with = "deserialize_option_i64")]
+    pub defender_faction: Option<i64>,
     pub result: String,
     #[serde(
         rename = "stealthed",
@@ -127,6 +150,49 @@ impl TornClient {
             .unwrap_or_default();
 
         Ok(attacks_map)
+    }
+
+    pub async fn get_own_faction_id(&self) -> Result<i64> {
+        let response = self
+            .client
+            .get("https://api.torn.com/faction/?selections=attacks")
+            .header("Authorization", format!("ApiKey {}", self.api_key))
+            .header("User-Agent", "faction-hits/0.1.0")
+            .send()
+            .await
+            .map_err(|e| TornApiError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(TornApiError::Api(format!("{}: {}", status, body)));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| TornApiError::Parse(e.to_string()))?;
+
+        if let Some(errors) = data.get("error") {
+            if let Ok(err_detail) = serde_json::from_value::<ApiErrorDetail>(errors.clone()) {
+                let err = TornApiError::from_api_error(err_detail.code, &err_detail.error);
+                return Err(err);
+            }
+            return Err(TornApiError::Api(format!("Torn API error: {:?}", errors)));
+        }
+
+        let attacks = data.get("attacks").and_then(|a| a.as_object());
+        if let Some(attacks) = attacks {
+            if let Some((_, attack)) = attacks.iter().next() {
+                if let Some(faction_id) = attack.get("attacker_faction").and_then(|v| v.as_i64()) {
+                    return Ok(faction_id);
+                }
+            }
+        }
+
+        Err(TornApiError::Api(
+            "Could not determine faction ID from API response".to_string(),
+        ))
     }
 }
 
