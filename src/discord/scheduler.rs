@@ -53,7 +53,11 @@ impl Scheduler {
                 Ok(attacks) => {
                     let new_hits: Vec<_> = attacks
                         .iter()
-                        .filter(|a| a.timestamp > config.last_check_timestamp && a.stealth == 0)
+                        .filter(|a| {
+                            a.timestamp > config.last_check_timestamp
+                                && a.stealth == 0
+                                && a.defender_faction == Some(config.faction_id)
+                        })
                         .cloned()
                         .collect();
 
@@ -150,8 +154,10 @@ mod tests {
                 id: 1,
                 attacker_id: 111,
                 attacker_name: "Attacker1".to_string(),
+                attacker_faction: Some(1),
                 defender_id: 222,
                 defender_name: "Defender1".to_string(),
+                defender_faction: None,
                 result: "Lost".to_string(),
                 stealth: 0,
                 respect: 1.5,
@@ -161,8 +167,10 @@ mod tests {
                 id: 2,
                 attacker_id: 333,
                 attacker_name: "Stealthy".to_string(),
+                attacker_faction: None,
                 defender_id: 444,
                 defender_name: "Defender2".to_string(),
+                defender_faction: None,
                 result: "Attacked".to_string(),
                 stealth: 1,
                 respect: 0.5,
@@ -172,8 +180,10 @@ mod tests {
                 id: 3,
                 attacker_id: 555,
                 attacker_name: "Attacker2".to_string(),
+                attacker_faction: Some(2),
                 defender_id: 666,
                 defender_name: "Defender3".to_string(),
+                defender_faction: None,
                 result: "Hospitalized".to_string(),
                 stealth: 0,
                 respect: 2.25,

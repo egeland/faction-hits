@@ -90,18 +90,43 @@ async fn run_cli() -> Result<()> {
 
     let client = TornClient::new(&config.api_key);
 
+    let faction_id = state.faction_id.or(config.faction_id);
+
+    let inferred_faction_id = if faction_id.is_none() {
+        println!("No faction ID provided, inferring from API key...");
+        match client.get_own_faction_id().await {
+            Ok(id) => {
+                println!("Detected faction ID: {}", id);
+                Some(id)
+            }
+            Err(e) => {
+                eprintln!("Warning: Could not infer faction ID: {}. Run with --faction-id to specify manually.", e);
+                None
+            }
+        }
+    } else {
+        faction_id
+    };
+
+    let mut state_for_filter = state.clone();
+    if state_for_filter.faction_id.is_none() {
+        state_for_filter.faction_id = inferred_faction_id;
+    }
+
+    let final_faction_id = state_for_filter.faction_id;
+
     println!(
         "Fetching faction attacks since timestamp {}...",
         state.last_check_timestamp
     );
 
     let attacks = client
-        .get_faction_attacks(config.faction_id, Some(state.last_check_timestamp))
+        .get_faction_attacks(final_faction_id, Some(state.last_check_timestamp))
         .await?;
 
     println!("Found {} total attacks", attacks.len());
 
-    let new_hits = filter_new_hits(&attacks, &state);
+    let new_hits = filter_new_hits(&attacks, &state_for_filter);
 
     if new_hits.is_empty() {
         println!("No new non-anonymous hits found.");
@@ -130,6 +155,9 @@ async fn run_cli() -> Result<()> {
 
     if let Some(latest) = get_latest_timestamp(&attacks) {
         let mut new_state = state;
+        if new_state.faction_id.is_none() {
+            new_state.faction_id = inferred_faction_id;
+        }
         new_state.update_timestamp(latest);
         new_state.save(&config.state_file)?;
         println!("State updated. Last check timestamp: {}", latest);
